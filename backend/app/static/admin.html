@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Bot — админка</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent-a: #22d3ee;
+    --accent-b: #8b5cf6;
+    --grad: linear-gradient(135deg, #22d3ee, #8b5cf6);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 60px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: .2px;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub { color: var(--muted); font-size: 13px; }
+  .head-line { height: 2px; background: var(--grad); border-radius: 2px; margin: 10px 0 20px; opacity: .7; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--grad); }
+  .tile .n { font-size: 24px; font-weight: 700; }
+  .tile .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  select, input {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font: inherit;
+  }
+  input { min-width: 220px; }
+  button {
+    background: var(--grad);
+    color: #06121f;
+    font-weight: 600;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+  a.chat-link { color: var(--accent-a); text-decoration: none; margin-left: auto; font-size: 13px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; background: var(--panel-2); }
+  tr:last-child td { border-bottom: 0; }
+  td.num { color: var(--accent-a); font-weight: 700; white-space: nowrap; }
+  td .muted { color: var(--muted); font-size: 12px; }
+  td.details { max-width: 260px; }
+  td.details .raw { color: var(--muted); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .b-new { background: rgba(34,211,238,.15); color: #22d3ee; }
+  .b-confirmed { background: rgba(52,211,153,.15); color: #34d399; }
+  .b-in_progress { background: rgba(139,92,246,.18); color: #a78bfa; }
+  .b-done { background: rgba(148,163,184,.18); color: #94a3b8; }
+  .b-cancelled { background: rgba(248,113,113,.15); color: #f87171; }
+  .u-low { color: #94a3b8; } .u-normal { color: #e2e8f0; }
+  .u-high { color: #fbbf24; } .u-urgent { color: #f87171; font-weight: 700; }
+
+  select.status { min-width: 130px; padding: 5px 8px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .flash { animation: flash 1.2s ease; }
+  @keyframes flash { 0% { background: rgba(34,211,238,.18); } 100% { background: transparent; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Order Bot · Панель заказов</h1>
+    <span class="sub">n8n-order-bot · демо-админка (без авторизации, только localhost)</span>
+    <a class="chat-link" href="/chat" target="_blank">→ открыть эмулятор чата</a>
+  </header>
+  <div class="head-line"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="bar">
+    <select id="f-status">
+      <option value="">все статусы</option>
+      <option value="new">новые</option>
+      <option value="confirmed">подтверждённые</option>
+      <option value="in_progress">в работе</option>
+      <option value="done">выполненные</option>
+      <option value="cancelled">отменённые</option>
+    </select>
+    <select id="f-source">
+      <option value="">все источники</option>
+      <option value="emulator">эмулятор</option>
+      <option value="telegram">telegram</option>
+      <option value="admin">admin</option>
+    </select>
+    <input id="f-service" type="search" placeholder="услуга содержит…">
+    <button id="btn-refresh">Обновить</button>
+    <button class="ghost" id="btn-auto">Авто: вкл</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Услуга / детали</th><th>Клиент</th><th>Срочн.</th>
+        <th>Источник</th><th>Статус</th><th>Создан</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="empty" id="empty" hidden>Заказов пока нет — отправьте сообщение в <a href="/chat" target="_blank" style="color:var(--accent-a)">эмуляторе чата</a>.</div>
+</div>
+
+<script>
+const STATUS_LABEL = {new:'новый', confirmed:'подтверждён', in_progress:'в работе', done:'выполнен', cancelled:'отменён'};
+const URGENCY_LABEL = {low:'не срочно', normal:'обычная', high:'высокая', urgent:'СРОЧНО'};
+let autoTimer = null;
+
+function fmtDT(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+async function loadStats() {
+  const s = await api('/api/stats');
+  const tiles = [['Всего', s.total, '']]
+    .concat(Object.entries(s.by_status).map(([k, v]) => [STATUS_LABEL[k] || k, v, 'b-' + k]));
+  document.getElementById('tiles').innerHTML = tiles.map(([l, n, cls]) =>
+    `<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+}
+
+async function loadOrders() {
+  const params = new URLSearchParams();
+  const st = document.getElementById('f-status').value;
+  const src = document.getElementById('f-source').value;
+  const svc = document.getElementById('f-service').value.trim();
+  if (st) params.set('status', st);
+  if (src) params.set('source', src);
+  if (svc) params.set('service_type', svc);
+  const orders = await api('/orders?' + params.toString());
+  const tbody = document.getElementById('rows');
+  document.getElementById('empty').hidden = orders.length > 0;
+  tbody.innerHTML = orders.map(o => {
+    const details = Object.entries(o.fields || {}).slice(0, 4)
+      .map(([k, v]) => `<div>• <b>${k}</b>: ${String(v)}</div>`).join('');
+    return `<tr id="row-${o.id}">
+      <td class="num">#${o.id}</td>
+      <td class="details"><b>${esc(o.service_type)}</b>${details ? '<div class="muted">'+details+'</div>' : ''}
+        <div class="raw" title="${escAttr(o.raw_text)}">💬 ${esc(o.raw_text)}</div></td>
+      <td>${esc(o.customer_name || '—')}<div class="muted">${esc(o.contact || '')}</div></td>
+      <td class="u-${o.urgency}">${URGENCY_LABEL[o.urgency] || o.urgency}</td>
+      <td><span class="muted">${o.source === 'telegram' ? '✈️ telegram' : o.source}</span></td>
+      <td><select class="status" data-id="${o.id}" onchange="setStatus(${o.id}, this.value)">
+        ${Object.keys(STATUS_LABEL).map(s =>
+          `<option value="${s}" ${s === o.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}
+      </select></td>
+      <td class="muted">${fmtDT(o.created_at)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function escAttr(s) { return esc(s).replace(/'/g, '&#39;'); }
+
+async function setStatus(id, status) {
+  try {
+    await api(`/orders/${id}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({status})});
+    document.querySelector(`#row-${id}`)?.classList.add('flash');
+    await loadStats();
+  } catch (e) {
+    alert('Не удалось изменить статус: ' + e.message);
+    loadOrders();
+  }
+}
+
+document.getElementById('btn-refresh').onclick = () => { loadOrders(); loadStats(); };
+document.getElementById('f-status').onchange = loadOrders;
+document.getElementById('f-source').onchange = loadOrders;
+document.getElementById('f-service').oninput = loadOrders;
+
+const btnAuto = document.getElementById('btn-auto');
+function setAuto(on) {
+  clearInterval(autoTimer);
+  if (on) { autoTimer = setInterval(() => { loadOrders(); loadStats(); }, 7000); btnAuto.textContent = 'Авто: вкл'; }
+  else btnAuto.textContent = 'Авто: выкл';
+}
+btnAuto.onclick = () => setAuto(btnAuto.textContent.includes('выкл'));
+
+loadOrders(); loadStats(); setAuto(true);
+</script>
+</body>
+</html>
