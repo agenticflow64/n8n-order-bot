@@ -25,9 +25,10 @@ def build_confirmation(order: dict) -> str:
 
     if service == MANUAL_SERVICE:
         lines = [
-            "Заказ разобрать не получилось.",
-            f"Оператор уже видит его (№{oid}) и сам напишет в этот чат.",
-            "Ничего повторять не нужно.",
+            "Не смог разобрать сообщение, извините.",
+            f"Оператор уже видит его (№{oid}) и напишет сюда сам.",
+            "Хотите быстрее? Пришлите заказ заново, простыми словами: "
+            "какая услуга, когда и телефон.",
         ]
         return "\n".join(lines)
 
@@ -45,5 +46,5 @@ def build_confirmation(order: dict) -> str:
     if order.get("contact"):
         lines.append(f"Контакт: {order['contact']}")
     lines.append("")
-    lines.append("Всё верно? Ответьте «да», и я подтвержу заказ.")
+    lines.append("Всё верно? Нажмите кнопку под этим сообщением.")
     return "\n".join(lines)

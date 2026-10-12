@@ -156,6 +156,20 @@ def confirm_order(order_id: int, db: Session = Depends(get_db)):
     return order_to_out(order)
 
 
+@app.post("/orders/{order_id}/cancel")
+def cancel_order(order_id: int, db: Session = Depends(get_db)):
+    """Отмена заказа кнопкой «✗ Отменить» в Telegram."""
+    order = db.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Заказ не найден")
+    if order.status == "done":
+        raise HTTPException(status_code=409, detail="Выполненный заказ нельзя отменить")
+    order.status = "cancelled"
+    db.commit()
+    db.refresh(order)
+    return order_to_out(order)
+
+
 @app.get("/api/stats")
 def stats(db: Session = Depends(get_db)):
     counts = {s.value: 0 for s in OrderStatus}
