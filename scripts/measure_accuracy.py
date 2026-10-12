@@ -142,7 +142,7 @@ def main() -> None:
     print("| # | извлечено | всё верно | время, с |")
     print("|---|-----------|-----------|----------|")
     for rid, info, ok, dt in rows:
-        print(f"| {rid} | {info} | {'✅' if ok else '❌'} | {dt:.1f} |")
+        print(f"| {rid} | {info} | {'да' if ok else 'нет'} | {dt:.1f} |")
     print()
     for k, v in total.items():
         label = {

@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Order Bot — админка</title>
+<title>Заказы — n8n-order-bot</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --panel: #1e293b;
-    --panel-2: #273449;
-    --border: #334155;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --accent-a: #22d3ee;
-    --accent-b: #8b5cf6;
-    --grad: linear-gradient(135deg, #22d3ee, #8b5cf6);
+    --bg: #ffffff;
+    --bg-subtle: #f6f8fa;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #57606a;
+    --accent: #0969da;
+    --green: #1a7f37;
+    --amber: #9a6700;
+    --red: #cf222e;
   }
   * { box-sizing: border-box; }
   body {
@@ -23,90 +23,77 @@
     color: var(--text);
     font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 60px; }
-  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
-  h1 {
-    margin: 0;
-    font-size: 22px;
-    letter-spacing: .2px;
-    background: var(--grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
   .sub { color: var(--muted); font-size: 13px; }
-  .head-line { height: 2px; background: var(--grad); border-radius: 2px; margin: 10px 0 20px; opacity: .7; }
+  a.chat-link { color: var(--accent); text-decoration: none; margin-left: auto; font-size: 13px; }
+  a.chat-link:hover { text-decoration: underline; }
 
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
-  .tile {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 14px;
-    position: relative;
-    overflow: hidden;
-  }
-  .tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--grad); }
-  .tile .n { font-size: 24px; font-weight: 700; }
-  .tile .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .summary { display: flex; flex-wrap: wrap; gap: 4px 20px; padding: 10px 0; color: var(--muted); font-size: 13px; border-bottom: 1px solid var(--border); }
+  .summary b { color: var(--text); font-weight: 600; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .dot-new { background: var(--green); }
+  .dot-confirmed { background: var(--accent); }
+  .dot-in_progress { background: var(--amber); }
+  .dot-done { background: #8c959f; }
+  .dot-cancelled { background: var(--red); }
 
-  .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
   select, input {
-    background: var(--panel);
+    background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 7px 10px;
+    border-radius: 6px;
+    padding: 5px 8px;
     font: inherit;
+    font-size: 13px;
   }
   input { min-width: 220px; }
   button {
-    background: var(--grad);
-    color: #06121f;
-    font-weight: 600;
-    border: 0;
-    border-radius: 8px;
-    padding: 8px 14px;
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 500;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 5px 12px;
     cursor: pointer;
     font: inherit;
+    font-size: 13px;
   }
-  button.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
-  a.chat-link { color: var(--accent-a); text-decoration: none; margin-left: auto; font-size: 13px; }
+  button:hover { background: #0860ca; }
+  button.ghost { background: var(--bg-subtle); color: var(--text); border-color: var(--border); }
+  button.ghost:hover { background: #eef1f4; }
 
-  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; background: var(--panel-2); }
+  table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; font-weight: 600; background: var(--bg-subtle); border-bottom: 1px solid var(--border); }
+  tbody tr:hover { background: var(--bg-subtle); }
   tr:last-child td { border-bottom: 0; }
-  td.num { color: var(--accent-a); font-weight: 700; white-space: nowrap; }
+  td.num { white-space: nowrap; }
   td .muted { color: var(--muted); font-size: 12px; }
-  td.details { max-width: 260px; }
-  td.details .raw { color: var(--muted); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+  td.details { max-width: 300px; }
+  td.details .raw { color: var(--muted); font-size: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
 
-  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .b-new { background: rgba(34,211,238,.15); color: #22d3ee; }
-  .b-confirmed { background: rgba(52,211,153,.15); color: #34d399; }
-  .b-in_progress { background: rgba(139,92,246,.18); color: #a78bfa; }
-  .b-done { background: rgba(148,163,184,.18); color: #94a3b8; }
-  .b-cancelled { background: rgba(248,113,113,.15); color: #f87171; }
-  .u-low { color: #94a3b8; } .u-normal { color: #e2e8f0; }
-  .u-high { color: #fbbf24; } .u-urgent { color: #f87171; font-weight: 700; }
+  .u-low { color: var(--muted); } .u-normal { color: var(--text); }
+  .u-high { color: var(--amber); } .u-urgent { color: var(--red); font-weight: 600; }
 
-  select.status { min-width: 130px; padding: 5px 8px; }
+  select.status { min-width: 120px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   .flash { animation: flash 1.2s ease; }
-  @keyframes flash { 0% { background: rgba(34,211,238,.18); } 100% { background: transparent; } }
+  @keyframes flash { 0% { background: #ddf4ff; } 100% { background: transparent; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Order Bot · Панель заказов</h1>
-    <span class="sub">n8n-order-bot · демо-админка (без авторизации, только localhost)</span>
-    <a class="chat-link" href="/chat" target="_blank">→ открыть эмулятор чата</a>
+    <h1>Заказы</h1>
+    <span class="sub">n8n-order-bot, демо без авторизации, только localhost</span>
+    <a class="chat-link" href="/chat" target="_blank">Эмулятор чата</a>
   </header>
-  <div class="head-line"></div>
 
-  <div class="tiles" id="tiles"></div>
+  <div class="summary" id="summary"></div>
 
   <div class="bar">
     <select id="f-status">
@@ -131,18 +118,18 @@
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Услуга / детали</th><th>Клиент</th><th>Срочн.</th>
+        <th>№</th><th>Услуга / детали</th><th>Клиент</th><th>Срочность</th>
         <th>Источник</th><th>Статус</th><th>Создан</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
   </table>
-  <div class="empty" id="empty" hidden>Заказов пока нет — отправьте сообщение в <a href="/chat" target="_blank" style="color:var(--accent-a)">эмуляторе чата</a>.</div>
+  <div class="empty" id="empty" hidden>Заказов пока нет — отправьте сообщение в <a href="/chat" target="_blank" style="color:var(--accent)">эмуляторе чата</a> или боту в Telegram.</div>
 </div>
 
 <script>
 const STATUS_LABEL = {new:'новый', confirmed:'подтверждён', in_progress:'в работе', done:'выполнен', cancelled:'отменён'};
-const URGENCY_LABEL = {low:'не срочно', normal:'обычная', high:'высокая', urgent:'СРОЧНО'};
+const URGENCY_LABEL = {low:'не срочно', normal:'обычная', high:'высокая', urgent:'срочно'};
 let autoTimer = null;
 
 function fmtDT(iso) {
@@ -159,10 +146,10 @@ async function api(path, opts) {
 
 async function loadStats() {
   const s = await api('/api/stats');
-  const tiles = [['Всего', s.total, '']]
-    .concat(Object.entries(s.by_status).map(([k, v]) => [STATUS_LABEL[k] || k, v, 'b-' + k]));
-  document.getElementById('tiles').innerHTML = tiles.map(([l, n, cls]) =>
-    `<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  const parts = [`Всего <b>${s.total}</b>`].concat(Object.entries(s.by_status)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `<span><span class="dot dot-${k}"></span>${STATUS_LABEL[k] || k} <b>${v}</b></span>`));
+  document.getElementById('summary').innerHTML = parts.join('');
 }
 
 async function loadOrders() {
@@ -178,14 +165,14 @@ async function loadOrders() {
   document.getElementById('empty').hidden = orders.length > 0;
   tbody.innerHTML = orders.map(o => {
     const details = Object.entries(o.fields || {}).slice(0, 4)
-      .map(([k, v]) => `<div>• <b>${k}</b>: ${String(v)}</div>`).join('');
+      .map(([k, v]) => `<div>${k}: ${String(v)}</div>`).join('');
     return `<tr id="row-${o.id}">
-      <td class="num">#${o.id}</td>
+      <td class="num">${o.id}</td>
       <td class="details"><b>${esc(o.service_type)}</b>${details ? '<div class="muted">'+details+'</div>' : ''}
-        <div class="raw" title="${escAttr(o.raw_text)}">💬 ${esc(o.raw_text)}</div></td>
+        <div class="raw" title="${escAttr(o.raw_text)}">${esc(o.raw_text)}</div></td>
       <td>${esc(o.customer_name || '—')}<div class="muted">${esc(o.contact || '')}</div></td>
       <td class="u-${o.urgency}">${URGENCY_LABEL[o.urgency] || o.urgency}</td>
-      <td><span class="muted">${o.source === 'telegram' ? '✈️ telegram' : o.source}</span></td>
+      <td><span class="muted">${o.source}</span></td>
       <td><select class="status" data-id="${o.id}" onchange="setStatus(${o.id}, this.value)">
         ${Object.keys(STATUS_LABEL).map(s =>
           `<option value="${s}" ${s === o.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}

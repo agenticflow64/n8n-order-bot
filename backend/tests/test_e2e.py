@@ -101,8 +101,8 @@ def test_e2e_structured_order_lands_in_db(client):
     assert stored["source"] == "emulator"
 
     # подтверждение сгенерировано: человекочитаемая сводка с номером
-    assert "✅ Заказ принят!" in result["reply"]
-    assert f"#{order_id}" in result["reply"]
+    assert "Заказ принят" in result["reply"]
+    assert f"№{order_id}" in result["reply"]
     assert "Бобик" in result["reply"]
 
 

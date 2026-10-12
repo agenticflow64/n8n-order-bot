@@ -33,7 +33,7 @@ def test_create_order_valid(client):
     # подтверждение — человекочитаемая сводка
     conf = body["confirmation_text"]
     assert "стрижка собак" in conf
-    assert f"#{body['id']}" in conf
+    assert f"№{body['id']}" in conf
     assert "срочн" in conf.lower()
     assert "+79161234567" in conf
 
@@ -141,7 +141,7 @@ def test_manual_escalation_confirmation(client):
     assert r.status_code == 201
     conf = r.json()["confirmation_text"]
     assert "оператор" in conf.lower()
-    assert "Не удалось" in conf
+    assert "разобрать" in conf
 
 
 def test_stats(client):
@@ -157,8 +157,8 @@ def test_stats(client):
 def test_admin_and_chat_pages(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert "Order Bot" in r.text
-    assert "#0f172a" in r.text or "0f172a" in r.text
+    assert "Заказы" in r.text
+    assert "#ffffff" in r.text and "#d0d7de" in r.text  # светлая тема
     r = client.get("/chat")
     assert r.status_code == 200
-    assert "эмулятор" in r.text.lower() or "Order Bot" in r.text
+    assert "Order Bot" in r.text or "чат" in r.text.lower()

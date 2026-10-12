@@ -6,7 +6,7 @@ URGENCY_RU = {
     "low": "не срочно",
     "normal": "обычная",
     "high": "высокая",
-    "urgent": "срочная (🔥)",
+    "urgent": "срочная",
 }
 
 STATUS_RU = {
@@ -25,26 +25,25 @@ def build_confirmation(order: dict) -> str:
 
     if service == MANUAL_SERVICE:
         lines = [
-            "⚠️ Не удалось автоматически оформить заказ.",
-            f"Оператор уже видит его в панели (#{oid}) и подключится вручную.",
-            "Ничего повторять не нужно — мы сами напишем в этот чат.",
+            "Заказ разобрать не получилось.",
+            f"Оператор уже видит его (№{oid}) и сам напишет в этот чат.",
+            "Ничего повторять не нужно.",
         ]
         return "\n".join(lines)
 
     lines = [
-        "✅ Заказ принят!",
-        f"🧾 Номер заказа: #{oid}",
-        f"🛠 Услуга: {service}",
+        f"Заказ принят, №{oid}.",
+        f"Услуга: {service}",
     ]
     fields = order.get("fields") or {}
     for key, value in fields.items():
-        lines.append(f"   • {key}: {value}")
+        lines.append(f"  {key}: {value}")
     urgency = order.get("urgency") or "normal"
-    lines.append(f"⏱ Срочность: {URGENCY_RU.get(urgency, urgency)}")
+    lines.append(f"Срочность: {URGENCY_RU.get(urgency, urgency)}")
     if order.get("customer_name"):
-        lines.append(f"👤 Имя: {order['customer_name']}")
+        lines.append(f"Имя: {order['customer_name']}")
     if order.get("contact"):
-        lines.append(f"📞 Контакт: {order['contact']}")
+        lines.append(f"Контакт: {order['contact']}")
     lines.append("")
-    lines.append("Если всё верно — подтвердите, ответив «да» или нажав кнопку в чате.")
+    lines.append("Всё верно? Ответьте «да», и я подтвержу заказ.")
     return "\n".join(lines)
