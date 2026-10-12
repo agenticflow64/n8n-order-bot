@@ -26,4 +26,4 @@ SYSTEM_PROMPT = (
     "- Отвечай только JSON, без пояснений."
 )
 
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning:free"

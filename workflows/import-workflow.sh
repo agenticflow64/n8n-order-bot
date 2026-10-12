@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Импорт workflow в запущенный n8n (docker compose) + активация.
-# Идемпотентен: старые копии с тем же именем удаляются перед импортом.
+# Идемпотентен: в order-bot.json задан фиксированный id, поэтому повторный
+# импорт обновляет workflow на месте (upsert), не создавая копий.
 #
 # Использование: ./workflows/import-workflow.sh
 set -euo pipefail
@@ -8,42 +9,17 @@ cd "$(dirname "$0")/.."
 
 WORKFLOW_FILE="/import/order-bot.json"
 WORKFLOW_NAME="Order Bot — приём заказов (TG + эмулятор)"
+WORKFLOW_ID="1759000000001"
 
-echo "==> n8n: удаляем предыдущие копии workflow (если были)"
-IDS=$(docker compose exec -T n8n n8n export:workflow --all 2>/dev/null | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    data = []
-for wf in data:
-    if wf.get('name') == '$WORKFLOW_NAME':
-        print(wf.get('id'))
-" || true)
-for id in $IDS; do
-  echo "    удаляем старую копию id=$id"
-  docker compose exec -T n8n n8n delete:workflow --id="$id" >/dev/null
-done
-
-echo "==> n8n: импорт $WORKFLOW_FILE"
+echo "==> n8n: импорт $WORKFLOW_FILE (upsert id=$WORKFLOW_ID)"
 docker compose exec -T n8n n8n import:workflow --input="$WORKFLOW_FILE"
 
-echo "==> n8n: ищем id импортированного workflow"
-NEW_ID=$(docker compose exec -T n8n n8n export:workflow --all 2>/dev/null | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for wf in data:
-    if wf.get('name') == '$WORKFLOW_NAME':
-        print(wf.get('id'))
-        break
-")
-if [ -z "$NEW_ID" ]; then
-  echo "ОШИБКА: workflow не найден после импорта" >&2
-  exit 1
-fi
+echo "==> n8n: активация workflow id=$WORKFLOW_ID"
+docker compose exec -T n8n n8n update:workflow --id="$WORKFLOW_ID" --active=true 2>&1 | grep -v "deprecated\|Please use\|Publishing\|^$\|take effect" || true
 
-echo "==> n8n: активация workflow id=$NEW_ID"
-docker compose exec -T n8n n8n update:workflow --id="$NEW_ID" --active=true
+echo "==> n8n: рестарт, чтобы активация и вебхук вступили в силу"
+docker compose restart n8n >/dev/null
+until curl -sf -m 3 http://localhost:5678/healthz >/dev/null 2>&1; do sleep 2; done
 
 echo ""
 echo "Готово. Workflow активен:"

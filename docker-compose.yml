@@ -2,6 +2,9 @@ services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: orderbot-n8n
+    # host-режим нужен там, где IPv4 docker-сети блокируется Cloudflare OpenRouter (403):
+    # контейнер использует сетевой стек хоста (IPv6-туннель). По умолчанию — обычный bridge.
+    network_mode: ${N8N_NETWORK_MODE:-bridge}
     ports:
       - "5678:5678"
     volumes:
@@ -18,8 +21,10 @@ services:
       - N8N_DIAGNOSTICS_ENABLED=false
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Moscow}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3.5-lightning:free}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      # как n8n ходит в backend: в bridge-режиме — по имени сервиса, в host-режиме — localhost
+      - BACKEND_BASE_URL=${BACKEND_BASE_URL:-http://backend:8000}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
       interval: 15s
