@@ -12,7 +12,10 @@
       "name": "Заметка: шапка",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-1420, -500]
+      "position": [
+        -1420,
+        -500
+      ]
     },
     {
       "parameters": {
@@ -25,7 +28,10 @@
       "name": "Заметка: приём",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-2340, -240]
+      "position": [
+        -2340,
+        -240
+      ]
     },
     {
       "parameters": {
@@ -38,7 +44,10 @@
       "name": "Заметка: LLM",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-760, -240]
+      "position": [
+        -760,
+        -240
+      ]
     },
     {
       "parameters": {
@@ -51,7 +60,10 @@
       "name": "Заметка: backend",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [0, -240]
+      "position": [
+        0,
+        -240
+      ]
     },
     {
       "parameters": {
@@ -64,7 +76,10 @@
       "name": "Webhook: Эмулятор чата",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1240, -40],
+      "position": [
+        -1240,
+        -40
+      ],
       "webhookId": "a1b2c3d4-0001-4a00-9000-000000000001"
     },
     {
@@ -82,7 +97,10 @@
       "name": "TG: расписание опроса",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-2260, 40]
+      "position": [
+        -2260,
+        40
+      ]
     },
     {
       "parameters": {
@@ -93,7 +111,10 @@
       "name": "TG: смещение (offset)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-2020, 40]
+      "position": [
+        -2020,
+        40
+      ]
     },
     {
       "parameters": {
@@ -124,7 +145,10 @@
       "name": "TG: getUpdates",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-1780, 40],
+      "position": [
+        -1780,
+        40
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -136,18 +160,26 @@
       "name": "TG: новые сообщения",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1540, 40]
+      "position": [
+        -1540,
+        40
+      ]
     },
     {
       "parameters": {
-        "updates": ["message"],
+        "updates": [
+          "message"
+        ],
         "additionalFields": {}
       },
       "id": "telegram-trigger",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
-      "position": [-1240, 160],
+      "position": [
+        -1240,
+        160
+      ],
       "disabled": true,
       "webhookId": "a1b2c3d4-0002-4a00-9000-000000000002",
       "credentials": {
@@ -166,7 +198,10 @@
       "name": "Нормализация ввода",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-900, 40]
+      "position": [
+        -900,
+        40
+      ]
     },
     {
       "parameters": {
@@ -196,7 +231,10 @@
       "name": "LLM: Извлечь заказ",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-660, 40],
+      "position": [
+        -660,
+        40
+      ],
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 2,
@@ -211,7 +249,10 @@
       "name": "Разбор ответа LLM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-420, 40]
+      "position": [
+        -420,
+        40
+      ]
     },
     {
       "parameters": {
@@ -298,7 +339,10 @@
       "name": "Заказ распознан?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [-180, 40]
+      "position": [
+        -180,
+        40
+      ]
     },
     {
       "parameters": {
@@ -315,7 +359,10 @@
       "name": "Создать заказ",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [180, -140],
+      "position": [
+        180,
+        -140
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -326,7 +373,10 @@
       "name": "Ретрай: пауза 3 сек",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [180, 220],
+      "position": [
+        180,
+        220
+      ],
       "webhookId": "a1b2c3d4-0003-4a00-9000-000000000003"
     },
     {
@@ -344,7 +394,10 @@
       "name": "Эскалация оператору",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [180, 400],
+      "position": [
+        180,
+        400
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -356,7 +409,10 @@
       "name": "Финальное сообщение",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 120]
+      "position": [
+        480,
+        120
+      ]
     },
     {
       "parameters": {
@@ -418,7 +474,10 @@
       "name": "Клиент: Telegram или эмулятор?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [740, 120]
+      "position": [
+        740,
+        120
+      ]
     },
     {
       "parameters": {
@@ -426,13 +485,18 @@
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
         "text": "={{ $json.reply }}",
-        "additionalFields": {}
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "tg-send",
       "name": "Ответ клиенту (Telegram)",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1020, -20],
+      "position": [
+        1020,
+        -20
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-order-bot",
@@ -450,7 +514,10 @@
       "name": "Ответ в эмулятор",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1020, 240]
+      "position": [
+        1020,
+        240
+      ]
     }
   ],
   "connections": {
