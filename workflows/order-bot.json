@@ -1,0 +1,520 @@
+{
+  "name": "Order Bot — приём заказов (TG + эмулятор)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🤖 Order Bot — приём заказов в свободной форме\n\nКлиент пишет текстом (Telegram или веб-эмулятор) → LLM (OpenRouter, бесплатная модель) приводит заказ к JSON → FastAPI-backend создаёт заказ → клиенту уходит подтверждение с человекочитаемой сводкой.\n\n**Промпт извлечения** хранится в ноде «Нормализация ввода» (копия `backend/app/prompt.py`).\n\n**Демо без Telegram:** откройте http://localhost:8000/chat — эмулятор шлёт вебхук в ноду «Webhook: Эмулятор чата».",
+        "height": 240,
+        "width": 560
+      },
+      "id": "note-title",
+      "name": "Заметка: шапка",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1420, -500]
+    },
+    {
+      "parameters": {
+        "content": "### 1️⃣ Приём сообщений\nОба триггера сводятся к одному формату: text / chat_id / name / source.\n\n**Для реального Telegram:** задайте Telegram credentials и включите ноду «Telegram Trigger» (она выключена, чтобы демо работало без токена).",
+        "height": 380,
+        "width": 300,
+        "color": 4
+      },
+      "id": "note-ingest",
+      "name": "Заметка: приём",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1300, -240]
+    },
+    {
+      "parameters": {
+        "content": "### 2️⃣ LLM-извлечение + ретрай\nOpenRouter → JSON. Не распознано с первой попытки → пауза 3 сек и повтор. После второй неудачи — эскалация оператору.",
+        "height": 620,
+        "width": 320,
+        "color": 5
+      },
+      "id": "note-llm",
+      "name": "Заметка: LLM",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, -240]
+    },
+    {
+      "parameters": {
+        "content": "### 3️⃣ Backend + ответ клиенту\nPOST /orders (дедуп по хэшу текста, статус new) → подтверждение → ответ в Telegram или в эмулятор (Respond to Webhook).",
+        "height": 560,
+        "width": 700,
+        "color": 6
+      },
+      "id": "note-backend",
+      "name": "Заметка: backend",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, -240]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-bot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-emulator",
+      "name": "Webhook: Эмулятор чата",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1240, -40],
+      "webhookId": "a1b2c3d4-0001-4a00-9000-000000000001"
+    },
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-1240, 160],
+      "disabled": true,
+      "webhookId": "a1b2c3d4-0002-4a00-9000-000000000002"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Сводим TG-update и webhook-запрос эмулятора к одному формату.\n// system_prompt — копия backend/app/prompt.py (синхронизируйте вручную).\nconst SYSTEM_PROMPT = [\n  'Ты — парсер заказов для сервиса записи клиентов. ',\n  'Из свободного текста (с опечатками, эмодзи, без знаков препинания) извлеки структуру ',\n  'и верни ТОЛЬКО валидный JSON без markdown-обёрток по схеме:',\n  '{',\n  '  \"service_type\": \"короткое название услуги (нормализуй: например «стрижка собак», «ремонт ноутбуков»),',\n  '  \"fields\": {произвольные ключи с деталями заказа: объект, дата, кличка, адрес, бюджет и т.п.},',\n  '  \"urgency\": \"low | normal | high | urgent\",',\n  '  \"customer_name\": \"имя клиента или null\",',\n  '  \"contact\": \"телефон/email/telegram из текста или null\",',\n  '  \"valid\": true | false',\n  '}',\n  'Правила:',\n  '- valid=false, если невозможно понять, какая услуга нужна.',\n  '- urgency=urgent только если в тексте есть явное «срочно», «!!» или жёсткий дедлайн.',\n  '- Телефон нормализуй: только цифры и ведущий +.',\n  '- Отвечай только JSON, без пояснений.',\n].join('\\n');\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const isTelegram = j.message !== undefined || j.update_id !== undefined;\n  let text, chatId, name, source;\n  if (isTelegram) {\n    text = (j.message && j.message.text) || '';\n    chatId = String((j.message && j.message.chat && j.message.chat.id) || '');\n    name = (j.message && j.message.from && (j.message.from.first_name || j.message.from.username)) || 'Клиент';\n    source = 'telegram';\n  } else {\n    const b = j.body || j;\n    text = b.text || '';\n    chatId = b.chat_id || 'emulator';\n    name = b.name || 'Клиент';\n    source = 'emulator';\n  }\n  out.push({ json: { text: String(text).trim(), chat_id: chatId, name, source, system_prompt: SYSTEM_PROMPT } });\n}\nif (!out.length || !out[0].json.text) {\n  throw new Error('Пустое сообщение: текст заказа не найден');\n}\nreturn out;"
+      },
+      "id": "normalize",
+      "name": "Нормализация ввода",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-900, 40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\\/+$/, '') }}/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENROUTER_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free', temperature: 0.1, messages: [ { role: 'system', content: $('Нормализация ввода').first().json.system_prompt }, { role: 'user', content: String($json.text) } ] }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "llm-extract",
+      "name": "LLM: Извлечь заказ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-660, 40],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Достаём JSON из ответа LLM (терпим markdown-обёртки) и решаем, валиден ли заказ.\nconst raw = $input.first().json;\nlet content = '';\ntry { content = raw.choices[0].message.content || ''; } catch (e) {}\n\nlet attempts = 1;\ntry { if ($('Ретрай: пауза 3 сек').isExecuted) attempts = 2; } catch (e) {}\n\nconst norm = $('Нормализация ввода').first().json;\n\nlet parsed = null;\nconst match = String(content).match(/\\{[\\s\\S]*\\}/);\nif (match) { try { parsed = JSON.parse(match[0]); } catch (e) {} }\n\nconst valid = Boolean(\n  parsed &&\n  parsed.valid !== false &&\n  parsed.service_type &&\n  String(parsed.service_type).trim().length >= 2\n);\n\nreturn [{ json: {\n  ...norm,\n  valid,\n  attempts,\n  parsed: parsed || {},\n  error: parsed ? null : 'LLM вернул не-JSON или не распознал услугу',\n} }];"
+      },
+      "id": "parse-llm",
+      "name": "Разбор ответа LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 40]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-valid",
+                    "leftValue": "={{ $json.valid }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Заказ распознан"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-retry",
+                    "leftValue": "={{ $json.attempts }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ретрай"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-giveup",
+                    "leftValue": "={{ $json.attempts }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Оператор"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-valid",
+      "name": "Заказ распознан?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-180, 40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/orders",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ service_type: $json.parsed.service_type, fields: $json.parsed.fields || {}, urgency: $json.parsed.urgency || 'normal', customer_name: $json.parsed.customer_name || $json.name || null, contact: $json.parsed.contact || null, raw_text: $json.text, source: $json.source }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "create-order",
+      "name": "Создать заказ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, -140],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "id": "retry-wait",
+      "name": "Ретрай: пауза 3 сек",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [180, 220],
+      "webhookId": "a1b2c3d4-0003-4a00-9000-000000000003"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/orders",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ service_type: 'Ручная обработка', fields: { проблема: 'LLM не смог извлечь заказ', попыток: $json.attempts }, urgency: 'normal', customer_name: $json.name || null, contact: null, raw_text: $json.text, source: $json.source, note: $json.error || 'не распознано' }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "escalate",
+      "name": "Эскалация оператору",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 400],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Формируем финальное сообщение клиенту из ответа backend.\nconst r = $input.first().json;\nconst norm = $('Нормализация ввода').first().json;\n\nlet reply;\nlet orderId = null;\nlet escalated = false;\n\nif (r && r.confirmation_text && r.service_type === 'Ручная обработка') {\n  reply = r.confirmation_text;\n  orderId = r.id != null ? r.id : null;\n  escalated = true;\n} else if (r && r.confirmation_text) {\n  reply = r.confirmation_text;\n  orderId = r.id != null ? r.id : null;\n} else {\n  reply = '⚠️ Не удалось оформить заказ автоматически. Оператор подключится вручную и ответит в этом чате.';\n  escalated = true;\n}\n\nreturn [{ json: {\n  reply,\n  order_id: orderId,\n  ok: true,\n  escalated,\n  source: norm.source,\n  chat_id: norm.chat_id,\n  name: norm.name,\n} }];"
+      },
+      "id": "final-message",
+      "name": "Финальное сообщение",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 120]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-tg",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "telegram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Telegram"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-emu",
+                    "leftValue": "={{ $json.source }}",
+                    "rightValue": "emulator",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Эмулятор"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-source",
+      "name": "Клиент: Telegram или эмулятор?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [740, 120]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "id": "tg-send",
+      "name": "Ответ клиенту (Telegram)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1020, -20]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: $json.ok, reply: $json.reply, order_id: $json.order_id, escalated: $json.escalated }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Ответ в эмулятор",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1020, 240]
+    }
+  ],
+  "connections": {
+    "Webhook: Эмулятор чата": {
+      "main": [
+        [
+          {
+            "node": "Нормализация ввода",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Нормализация ввода",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Нормализация ввода": {
+      "main": [
+        [
+          {
+            "node": "LLM: Извлечь заказ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM: Извлечь заказ": {
+      "main": [
+        [
+          {
+            "node": "Разбор ответа LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбор ответа LLM": {
+      "main": [
+        [
+          {
+            "node": "Заказ распознан?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Заказ распознан?": {
+      "main": [
+        [
+          {
+            "node": "Создать заказ",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ретрай: пауза 3 сек",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Эскалация оператору",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ретрай: пауза 3 сек": {
+      "main": [
+        [
+          {
+            "node": "LLM: Извлечь заказ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Создать заказ": {
+      "main": [
+        [
+          {
+            "node": "Финальное сообщение",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Эскалация оператору": {
+      "main": [
+        [
+          {
+            "node": "Финальное сообщение",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Финальное сообщение": {
+      "main": [
+        [
+          {
+            "node": "Клиент: Telegram или эмулятор?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Клиент: Telegram или эмулятор?": {
+      "main": [
+        [
+          {
+            "node": "Ответ клиенту (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ответ в эмулятор",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
