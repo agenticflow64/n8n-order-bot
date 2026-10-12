@@ -23,6 +23,8 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3.5-lightning:free}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      # токен Telegram-бота: нужен workflow для getUpdates-опроса (пусто → опрос не выполняется)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       # как n8n ходит в backend: в bridge-режиме — по имени сервиса, в host-режиме — localhost
       - BACKEND_BASE_URL=${BACKEND_BASE_URL:-http://backend:8000}
     healthcheck:

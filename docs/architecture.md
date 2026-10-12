@@ -12,7 +12,9 @@ flowchart LR
     subgraph n8n["n8n (localhost:5678) — workflow order-bot"]
         direction TB
         W["Webhook: Эмулятор чата\nPOST /webhook/order-bot"]
-        T["Telegram Trigger\n(выключен до настройки creds)"]
+        PT["TG: расписание опроса\nкаждые 30 с"]
+        PGU["TG: getUpdates\nlong poll 25 с, offset в static data"]
+        T["Telegram Trigger\n(webhook-режим, выключен:\nнужен публичный URL)"]
         N["Нормализация ввода\n+ system-промпт"]
         L["LLM: Извлечь заказ\nHTTP → OpenRouter :free"]
         P["Разбор ответа LLM\nJSON + валидация"]
@@ -33,10 +35,11 @@ flowchart LR
         DB[(SQLite orders.db)]
     end
 
-    TG --> T
+    TG --> PT
     EMU --> W
     W --> N
-    T --> N
+    PT --> PGU
+    PGU --> N
     N --> L
     L --> P
     P --> SW1
@@ -70,7 +73,8 @@ flowchart LR
 ## Поток данных (успешный путь)
 
 1. Клиент пишет текстом в Telegram **или** в эмуляторе (`POST /webhook/order-bot`, body `{text, name, source}`).
-2. «Нормализация ввода» приводит оба формата к `{text, chat_id, name, source}` и подставляет system-промпт.
+2. Приём из Telegram — polling-цепочка: «TG: расписание опроса» (каждые 30 с) → «TG: смещение (offset)» → «TG: getUpdates» (long poll 25 с, токен из `TELEGRAM_BOT_TOKEN` в окружении n8n) → «TG: новые сообщения» (offset в static data воркфлоу, первый опрос отмечает накопившееся прочитанным). Встроенный «Telegram Trigger» — webhook-режим, для него нужен публичный URL, поэтому нода выключена.
+3. «Нормализация ввода» приводит оба формата к `{text, chat_id, name, source}` и подставляет system-промпт.
 3. «LLM: Извлечь заказ» — POST в OpenRouter (ключ из переменных окружения контейнера n8n, не из credentials). Температура 0.1.
 4. «Разбор ответа LLM» вырезает JSON (терпим markdown-обёртки), проверяет `valid` и `service_type`.
 5. Switch: распознан → «Создать заказ»; не распознан → пауза 3 с и повтор; вторая неудача → «Эскалация оператору» (заказ с услугой «Ручная обработка» попадает в админку).

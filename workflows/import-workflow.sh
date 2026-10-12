@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Импорт workflow в запущенный n8n (docker compose) + активация.
+# Импорт workflow в запущенный n8n (docker compose) + активация + Telegram credential.
 # Идемпотентен: в order-bot.json задан фиксированный id, поэтому повторный
 # импорт обновляет workflow на месте (upsert), не создавая копий.
 #
@@ -10,6 +10,9 @@ cd "$(dirname "$0")/.."
 WORKFLOW_FILE="/import/order-bot.json"
 WORKFLOW_NAME="Order Bot — приём заказов (TG + эмулятор)"
 WORKFLOW_ID="1759000000001"
+
+# credential для ноды sendMessage (нужен TELEGRAM_BOT_TOKEN в .env)
+./scripts/import-telegram-credentials.sh
 
 echo "==> n8n: импорт $WORKFLOW_FILE (upsert id=$WORKFLOW_ID)"
 docker compose exec -T n8n n8n import:workflow --input="$WORKFLOW_FILE"
@@ -26,3 +29,6 @@ echo "Готово. Workflow активен:"
 echo "  UI:       http://localhost:5678 (workflow «$WORKFLOW_NAME»)"
 echo "  Webhook:  http://localhost:5678/webhook/order-bot"
 echo "  Эмулятор: http://localhost:8000/chat"
+if grep -q '^TELEGRAM_BOT_TOKEN=..*' .env 2>/dev/null; then
+  echo "  Telegram: бот опрашивает getUpdates каждые 30 с — напишите ему /start и заказ текстом."
+fi

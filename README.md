@@ -45,23 +45,30 @@ docker compose up -d --build
 | Что | URL |
 |-----|-----|
 | n8n UI (workflow со выполнениями) | http://localhost:5678 |
-| Эмулятор Telegram-чата (демо без токена) | http://localhost:8000/chat |
-| Админка заказов (тёмная тема) | http://localhost:8000 |
+| Эмулятор Telegram-чата (второй канал демо) | http://localhost:8000/chat |
+| Админка заказов | http://localhost:8000 |
 | Webhook n8n | `POST http://localhost:5678/webhook/order-bot` |
 
 Первый вход в n8n попросит создать локального владельца (owner) — это нормально для локального демо.
 
-## Демо без Telegram-токена
+## Реальный Telegram-бот (polling)
 
-В workflow нода **Telegram Trigger выключена** — стек запускается и работает без токена. Веб-эмулятор `http://localhost:8000/chat` отправляет те же данные, что и реальный бот, в ноду «Webhook: Эмулятор чата» (`POST /webhook/order-bot`, body `{"text": "...", "name": "Клиент", "source": "emulator"}`), и получает ответ через `Respond to Webhook`.
+Локальный n8n сидит за NAT без публичного URL, поэтому встроенный «Telegram Trigger» (он работает только через webhook) не подходит. Вместо него в workflow стоит цепочка getUpdates-опроса: «TG: расписание опроса» (каждые 30 с) → «TG: смещение (offset)» → «TG: getUpdates» (long poll 25 с) → «TG: новые сообщения» (offset хранится в static data воркфлоу, поэтому повторный опрос не обрабатывает одно сообщение дважды).
 
-Тестовый режим ноды: в n8n нажмите «Listen for test event» на Webhook-ноде и в эмуляторе (⚙️) замените URL на `http://localhost:5678/webhook-test/order-bot` — удобно, чтобы видеть выполнение именно в открытом редакторе.
+Настройка после `docker compose up -d --build`:
 
-## Реальный Telegram-бот
+1. Заполните `TELEGRAM_BOT_TOKEN` в `.env` (токен от @BotFather) и пересоздайте n8n: `docker compose up -d n8n`.
+2. Запустите `./workflows/import-workflow.sh` — скрипт импортирует credential `Telegram Bot (order-bot)` (токен берётся из `.env`, в логи и git не попадает), обновит workflow и активирует его.
 
-1. Заполните `TELEGRAM_BOT_TOKEN` в `.env` (токен от @BotFather).
-2. В n8n UI откройте workflow → нода **Telegram Trigger** → создайте Telegram API credential с этим токеном → **включите ноду**.
-3. Пишите боту в Telegram — далее тот же флоу; ответ уйдёт через ноду «Ответ клиенту (Telegram)».
+Для живой проверки напишите боту **/start**, затем заказ текстом, например: «надо стрижку собаке на выходные, телефон 89161234567». Ответ придёт в тот же чат через ноду «Ответ клиенту (Telegram)». Задержка до ~30 с — это интервал опроса; выполнение видно в n8n UI → Executions (каждые 30 с там появляются опросы, включая пустые).
+
+Без токена в `.env` цепочка опроса сама выключается (нода «TG: смещение» возвращает пусто), стек работает только на веб-эмуляторе.
+
+## Веб-эмулятор чата (демо без Telegram)
+
+Эмулятор `http://localhost:8000/chat` отправляет те же данные, что и реальный бот, в ноду «Webhook: Эмулятор чата» (`POST /webhook/order-bot`, body `{"text": "...", "name": "Клиент", "source": "emulator"}`), и получает ответ через `Respond to Webhook`.
+
+Тестовый режим ноды: в n8n нажмите «Listen for test event» на Webhook-ноде и в эмуляторе («Настройки») замените URL на `http://localhost:5678/webhook-test/order-bot` — удобно, чтобы видеть выполнение именно в открытом редакторе.
 
 ## Архитектура
 
@@ -85,6 +92,7 @@ backend/.venv/bin/python -m pytest -m smoke # смоук с реальным Ope
 
 ```
 workflows/order-bot.json     # n8n workflow (импорт: ./workflows/import-workflow.sh)
+scripts/import-telegram-credentials.sh  # credential Telegram Bot API в n8n (токен из .env)
 backend/app/                 # FastAPI: main, schemas, models, prompt, confirmations
 backend/app/static/          # админка (/) и эмулятор чата (/chat)
 backend/tests/               # pytest: test_api, test_e2e, test_smoke_llm
