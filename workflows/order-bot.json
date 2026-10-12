@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "content": "### 1. Приём сообщений\nОба канала сводятся к одному формату: text / chat_id / name / source.\n\n**Telegram (polling):** цепочка «расписание → offset → getUpdates → новые сообщения» опрашивает Bot API каждые 30 с. Токен — переменная `TELEGRAM_BOT_TOKEN` в окружении n8n, offset хранится в static data воркфлоу.\n\nНода «Telegram Trigger» выключена: это вебхук-режим, для него нужен публичный URL. Локальный стек за NAT работает через getUpdates-цепочку.",
+        "content": "### 1. Приём сообщений\nОба канала сводятся к одному формату: text / chat_id / name / source.\n\n**Telegram (polling):** цепочка «расписание → offset → getUpdates → новые сообщения» опрашивает Bot API каждые 30 с (allowed_updates: message + callback_query, то есть и нажатия inline-кнопок). Токен — переменная `TELEGRAM_BOT_TOKEN` в окружении n8n, offset хранится в static data воркфлоу.\n\nНода «Telegram Trigger» выключена: это вебхук-режим, для него нужен публичный URL. Локальный стек за NAT работает через getUpdates-цепочку.",
         "height": 460,
         "width": 900,
         "color": 4
@@ -51,7 +51,7 @@
     },
     {
       "parameters": {
-        "content": "### 3. Backend + ответ клиенту\nPOST /orders (дедуп по хэшу текста, статус new) → подтверждение → ответ в Telegram (sendMessage, credential «Telegram Bot (order-bot)») или в эмулятор (Respond to Webhook).",
+        "content": "### 3. Backend + ответ клиенту\nPOST /orders (дедуп по хэшу текста, статус new) → подтверждение → ответ в Telegram (sendMessage с inline-кнопками ✓/✗, credential «Telegram Bot (order-bot)») или в эмулятор (Respond to Webhook).\n\n/start и /help перехватываются до LLM (нода «Приветствие или заказ?»). Приветствие и эскалация уходят без кнопок (нода «Ответ клиенту (текст)»), текст — копия backend/app/bot_replies.py.",
         "height": 560,
         "width": 700,
         "color": 6
@@ -133,7 +133,7 @@
             },
             {
               "name": "allowed_updates",
-              "value": "[\"message\"]"
+              "value": "[\"message\", \"callback_query\"]"
             }
           ]
         },
@@ -154,7 +154,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Отдаём в основной флоу только новые текстовые сообщения.\n// Транзитные ошибки Telegram (например, 409 при ручном getUpdates) пропускаем молча.\nconst res = $input.first().json;\nif (res && res.ok === false) {\n  if (res.error_code !== 409) throw new Error('getUpdates: ' + (res.description || 'ошибка Telegram API'));\n  return [];\n}\nconst updates = Array.isArray(res && res.result) ? res.result : [];\nconst sd = $getWorkflowStaticData('global');\nlet fresh = [];\nif (updates.length) {\n  const seen = Number(sd.tgOffset || 0);\n  sd.tgOffset = Math.max(...updates.map(u => u.update_id)) + 1;\n  // offset ещё не инициализирован и это самый первый опрос — считаем\n  // накопившееся бэклогом и просто отмечаем прочитанным; всё, что придёт\n  // позже (tgInit уже стоит), обрабатывается как новое.\n  if (seen || sd.tgInit) {\n    fresh = updates.filter(u => u.message && u.message.text && u.update_id >= seen);\n  }\n}\nsd.tgInit = true;\nreturn fresh.map(u => ({ json: u }));"
+        "jsCode": "// Отдаём в основной флоу только новые апдейты: текстовые сообщения\n// и нажатия inline-кнопок (callback_query). Разделяет их следующая\n// нода «Сообщение или кнопка?».\n// Транзитные ошибки Telegram (например, 409 при ручном getUpdates) пропускаем молча.\nconst res = $input.first().json;\nif (res && res.ok === false) {\n  if (res.error_code !== 409) throw new Error('getUpdates: ' + (res.description || 'ошибка Telegram API'));\n  return [];\n}\nconst updates = Array.isArray(res && res.result) ? res.result : [];\nconst sd = $getWorkflowStaticData('global');\nlet fresh = [];\nif (updates.length) {\n  const seen = Number(sd.tgOffset || 0);\n  sd.tgOffset = Math.max(...updates.map(u => u.update_id)) + 1;\n  // offset ещё не инициализирован и это самый первый опрос — считаем\n  // накопившееся бэклогом и просто отмечаем прочитанным; всё, что придёт\n  // позже (tgInit уже стоит), обрабатывается как новое.\n  if (seen || sd.tgInit) {\n    fresh = updates.filter(u => (u.message || u.callback_query) && u.update_id >= seen);\n  }\n}\nsd.tgInit = true;\nreturn fresh.map(u => ({ json: u }));"
       },
       "id": "tg-poll-dispatch",
       "name": "TG: новые сообщения",
@@ -192,7 +192,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Сводим TG-update и webhook-запрос эмулятора к одному формату.\n// system_prompt — копия backend/app/prompt.py (синхронизируйте вручную).\nconst SYSTEM_PROMPT = [\n  'Ты — парсер заказов для сервиса записи клиентов. ',\n  'Из свободного текста (с опечатками, эмодзи, без знаков препинания) извлеки структуру ',\n  'и верни ТОЛЬКО валидный JSON без markdown-обёрток по схеме:',\n  '{',\n  '  \"service_type\": \"короткое название услуги (нормализуй: например «стрижка собак», «ремонт ноутбуков»),',\n  '  \"fields\": {произвольные ключи с деталями заказа: объект, дата, кличка, адрес, бюджет и т.п.},',\n  '  \"urgency\": \"low | normal | high | urgent\",',\n  '  \"customer_name\": \"имя клиента или null\",',\n  '  \"contact\": \"телефон/email/telegram из текста или null\",',\n  '  \"valid\": true | false',\n  '}',\n  'Правила:',\n  '- valid=false, если невозможно понять, какая услуга нужна.',\n  '- urgency=urgent только если в тексте есть явное «срочно», «!!» или жёсткий дедлайн.',\n  '- Телефон нормализуй: только цифры и ведущий +.',\n  '- Отвечай только JSON, без пояснений.',\n].join('\\n');\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const isTelegram = j.message !== undefined || j.update_id !== undefined;\n  let text, chatId, name, source;\n  if (isTelegram) {\n    text = (j.message && j.message.text) || '';\n    chatId = String((j.message && j.message.chat && j.message.chat.id) || '');\n    name = (j.message && j.message.from && (j.message.from.first_name || j.message.from.username)) || 'Клиент';\n    source = 'telegram';\n  } else {\n    const b = j.body || j;\n    text = b.text || '';\n    chatId = b.chat_id || 'emulator';\n    name = b.name || 'Клиент';\n    source = 'emulator';\n  }\n  out.push({ json: { text: String(text).trim(), chat_id: chatId, name, source, system_prompt: SYSTEM_PROMPT } });\n}\nif (!out.length || !out[0].json.text) {\n  throw new Error('Пустое сообщение: текст заказа не найден');\n}\nreturn out;"
+        "jsCode": "// Сводим TG-update и webhook-запрос эмулятора к одному формату.\n// system_prompt — копия backend/app/prompt.py (синхронизируйте вручную).\nconst SYSTEM_PROMPT = [\n  'Ты — парсер заказов для сервиса записи клиентов. ',\n  'Из свободного текста (с опечатками, эмодзи, без знаков препинания) извлеки структуру ',\n  'и верни ТОЛЬКО валидный JSON без markdown-обёрток по схеме:',\n  '{',\n  '  \"service_type\": \"короткое название услуги (нормализуй: например «стрижка собак», «ремонт ноутбуков»),',\n  '  \"fields\": {произвольные ключи с деталями заказа: объект, дата, кличка, адрес, бюджет и т.п.},',\n  '  \"urgency\": \"low | normal | high | urgent\",',\n  '  \"customer_name\": \"имя клиента или null\",',\n  '  \"contact\": \"телефон/email/telegram из текста или null\",',\n  '  \"valid\": true | false',\n  '}',\n  'Правила:',\n  '- valid=false, если невозможно понять, какая услуга нужна.',\n  '- urgency=urgent только если в тексте есть явное «срочно», «!!» или жёсткий дедлайн.',\n  '- Телефон нормализуй: только цифры и ведущий +.',\n  '- Отвечай только JSON, без пояснений.',\n].join('\\n');\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json;\n  const isTelegram = j.message !== undefined || j.update_id !== undefined;\n  let text, chatId, name, source;\n  if (isTelegram) {\n    text = (j.message && j.message.text) || '';\n    chatId = String((j.message && j.message.chat && j.message.chat.id) || '');\n    name = (j.message && j.message.from && (j.message.from.first_name || j.message.from.username)) || 'Клиент';\n    source = 'telegram';\n  } else {\n    const b = j.body || j;\n    text = b.text || '';\n    chatId = b.chat_id || 'emulator';\n    name = b.name || 'Клиент';\n    source = 'emulator';\n  }\n  // /start и /help не идут в LLM: копия is_welcome из backend/app/bot_replies.py\n  const welcome = /^\\/(start|help)(@[\\w_]+)?(\\s|$)/i.test(String(text).trim());\n  out.push({ json: { text: String(text).trim(), chat_id: chatId, name, source, welcome, system_prompt: SYSTEM_PROMPT } });\n}\nif (!out.length || !out[0].json.text) {\n  throw new Error('Пустое сообщение: текст заказа не найден');\n}\nreturn out;"
       },
       "id": "normalize",
       "name": "Нормализация ввода",
@@ -232,7 +232,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -660,
+        -560,
         40
       ],
       "onError": "continueRegularOutput",
@@ -250,7 +250,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -420,
+        -330,
         40
       ]
     },
@@ -403,7 +403,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Формируем финальное сообщение клиенту из ответа backend.\nconst r = $input.first().json;\nconst norm = $('Нормализация ввода').first().json;\n\nlet reply;\nlet orderId = null;\nlet escalated = false;\n\nif (r && r.confirmation_text && r.service_type === 'Ручная обработка') {\n  reply = r.confirmation_text;\n  orderId = r.id != null ? r.id : null;\n  escalated = true;\n} else if (r && r.confirmation_text) {\n  reply = r.confirmation_text;\n  orderId = r.id != null ? r.id : null;\n} else {\n  reply = 'Не удалось оформить заказ автоматически. Оператор подключится вручную и ответит в этом чате.';\n  escalated = true;\n}\n\nconst dbg = { input: String(JSON.stringify(r)).slice(0, 400) };\ntry { dbg.parsed = $('Разбор ответа LLM').first().json.parsed; } catch (e) { dbg.parsed = 'n/a'; }\n\nreturn [{ json: {\n  reply,\n  order_id: orderId,\n  ok: true,\n  escalated,\n  debug: dbg,\n  source: norm.source,\n  chat_id: norm.chat_id,\n  name: norm.name,\n} }];"
+        "jsCode": "// Формируем финальное сообщение клиенту из ответа backend.\nconst r = $input.first().json;\nconst norm = $('Нормализация ввода').first().json;\n\nlet reply;\nlet orderId = null;\nlet escalated = false;\n\nif (r && r.confirmation_text && r.service_type === 'Ручная обработка') {\n  reply = r.confirmation_text;\n  orderId = r.id != null ? r.id : null;\n  escalated = true;\n} else if (r && r.confirmation_text) {\n  reply = r.confirmation_text;\n  orderId = r.id != null ? r.id : null;\n} else {\n  reply = 'Не удалось оформить заказ автоматически. Оператор подключится вручную и ответит в этом чате.';\n  escalated = true;\n}\n\nconst dbg = { input: String(JSON.stringify(r)).slice(0, 400) };\ntry { dbg.parsed = $('Разбор ответа LLM').first().json.parsed; } catch (e) { dbg.parsed = 'n/a'; }\n\nconst showButtons = orderId != null && !escalated;\n\nreturn [{ json: {\n  reply,\n  order_id: orderId,\n  ok: true,\n  escalated,\n  show_buttons: showButtons,\n  debug: dbg,\n  source: norm.source,\n  chat_id: norm.chat_id,\n  name: norm.name,\n} }];"
       },
       "id": "final-message",
       "name": "Финальное сообщение",
@@ -486,7 +486,30 @@
         "chatId": "={{ $json.chat_id }}",
         "text": "={{ $json.reply }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "✓ Подтвердить",
+                      "additionalFields": {
+                        "callback_data": "=confirm:{{ $json.order_id }}"
+                      }
+                    },
+                    {
+                      "text": "✗ Отменить",
+                      "additionalFields": {
+                        "callback_data": "=cancel:{{ $json.order_id }}"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "tg-send",
@@ -517,6 +540,409 @@
       "position": [
         1020,
         240
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Кнопка",
+                    "leftValue": "={{ $json.callback_query ? 'callback' : 'message' }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Кнопка"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Сообщение",
+                    "leftValue": "={{ $json.callback_query ? 'callback' : 'message' }}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Сообщение"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "kind-switch",
+      "name": "Сообщение или кнопка?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1300,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Приветствие",
+                    "leftValue": "={{ $json.welcome ? 'yes' : 'no' }}",
+                    "rightValue": "yes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Приветствие"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Заказ",
+                    "leftValue": "={{ $json.welcome ? 'yes' : 'no' }}",
+                    "rightValue": "no",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Заказ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "welcome-switch",
+      "name": "Приветствие или заказ?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -800,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Приветствие на /start и /help: LLM не нужен.\n// Текст — копия WELCOME_TEXT из backend/app/bot_replies.py, синхронизируйте вручную.\nconst WELCOME_TEXT = [\n  'Привет 👋 Я оформляю заказы в один шаг: пишете как удобно, я раскладываю на детали, даю номер и передаю в работу.',\n  '',\n  'Например, хватит такого:',\n  '• надо стрижку собаке на выходные, телефон 89161234567',\n  '• ноут асус не включается, я Дима, можете вечером?',\n  '• срочно нужен мастер, кран потёк, адрес Ленина 5',\n  '',\n  'Пишите заказ прямо сюда, своим языком: с опечатками тоже сработает. Через несколько секунд пришлю сводку и две кнопки, подтвердить или отменить.',\n].join('\\n');\n\nconst norm = $input.first().json;\nreturn [{ json: {\n  reply: WELCOME_TEXT,\n  order_id: null,\n  ok: true,\n  escalated: false,\n  show_buttons: false,\n  debug: { welcome: true },\n  source: norm.source,\n  chat_id: norm.chat_id,\n  name: norm.name,\n} }];"
+      },
+      "id": "welcome-reply",
+      "name": "Приветствие",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Кнопки",
+                    "leftValue": "={{ $json.show_buttons ? 'yes' : 'no' }}",
+                    "rightValue": "yes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Кнопки"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Текст",
+                    "leftValue": "={{ $json.show_buttons ? 'yes' : 'no' }}",
+                    "rightValue": "no",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Текст"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buttons-switch",
+      "name": "Кнопки или текст?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "tg-send-plain",
+      "name": "Ответ клиенту (текст)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        60
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-order-bot",
+          "name": "Telegram Bot (order-bot)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Нажатие inline-кнопки: callback_data вида confirm:{id} / cancel:{id}.\n// Логика — копия parse_callback_data из backend/app/bot_replies.py.\nconst u = $input.first().json;\nconst cq = u.callback_query || {};\nconst m = String(cq.data || '').match(/^(confirm|cancel):(\\d+)$/);\nreturn [{ json: {\n  action: m ? m[1] : 'unknown',\n  order_id: m ? Number(m[2]) : null,\n  cbq_id: cq.id,\n  chat_id: cq.message && cq.message.chat ? String(cq.message.chat.id) : null,\n  message_id: cq.message ? cq.message.message_id : null,\n} }];"
+      },
+      "id": "cb-parse",
+      "name": "Кнопка: разбор",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1060,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_BASE_URL || 'http://backend:8000') + ($json.action === 'confirm' ? '/orders/' + $json.order_id + '/confirm' : $json.action === 'cancel' ? '/orders/' + $json.order_id + '/cancel' : '/api/health') }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "cb-backend",
+      "name": "Кнопка: backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -820,
+        340
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Ответ на нажатие кнопки: alert -> answerCallbackQuery, edit -> editMessageText\n// ('' — сообщение не меняем). Логика — копия callback_reply из backend/app/bot_replies.py.\nconst prev = $('Кнопка: разбор').first().json;\nconst r = $input.first().json;\n\nlet alert;\nlet edit = '';\nif (prev.action === 'unknown') {\n  alert = 'Кнопка не распознана, напишите заказ текстом';\n} else if (r && r.status === 'confirmed') {\n  alert = 'Принято';\n  edit = 'Заказ №' + r.id + ' подтверждён, ждите звонка.';\n} else if (r && r.status === 'cancelled') {\n  alert = 'Готово';\n  edit = 'Заказ №' + r.id + ' отменён. Напишите новый в любой момент.';\n} else {\n  alert = 'Не получилось, попробуйте ещё раз или напишите в чат';\n}\n\nreturn [{ json: {\n  cbq_id: prev.cbq_id,\n  chat_id: prev.chat_id,\n  message_id: prev.message_id,\n  alert,\n  edit,\n} }];"
+      },
+      "id": "cb-reply",
+      "name": "Кнопка: ответ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -580,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Правим",
+                    "leftValue": "={{ $json.edit ? 'yes' : 'no' }}",
+                    "rightValue": "yes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Правим"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-Только alert",
+                    "leftValue": "={{ $json.edit ? 'yes' : 'no' }}",
+                    "rightValue": "no",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Только alert"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cb-switch",
+      "name": "Есть правка текста?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -340,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_BOT_TOKEN + '/editMessageText' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, message_id: $json.message_id, text: $json.edit }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "cb-edit",
+      "name": "TG: правка сообщения",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -100,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.telegram.org/bot' + $env.TELEGRAM_BOT_TOKEN + '/answerCallbackQuery' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ callback_query_id: $json.cbq_id, text: $json.alert }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "cb-answer",
+      "name": "TG: ответ на кнопку",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        340
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "### 4. Inline-кнопки\nУспешный заказ уходит в Telegram с кнопками «✓ Подтвердить» / «✗ Отменить» (callback_data confirm:{id} / cancel:{id}). Нажатие приходит тем же getUpdates: «Сообщение или кнопка?» делит поток, backend меняет статус (/orders/{id}/confirm или /cancel), затем answerCallbackQuery + editMessageText на сообщении с кнопками.",
+        "height": 420,
+        "width": 1180,
+        "color": 3
+      },
+      "id": "note-buttons",
+      "name": "Заметка: кнопки",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1300,
+        100
       ]
     }
   ],
@@ -558,7 +984,7 @@
       "main": [
         [
           {
-            "node": "Нормализация ввода",
+            "node": "Сообщение или кнопка?",
             "type": "main",
             "index": 0
           }
@@ -581,17 +1007,6 @@
         [
           {
             "node": "Нормализация ввода",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Нормализация ввода": {
-      "main": [
-        [
-          {
-            "node": "LLM: Извлечь заказ",
             "type": "main",
             "index": 0
           }
@@ -693,7 +1108,7 @@
       "main": [
         [
           {
-            "node": "Ответ клиенту (Telegram)",
+            "node": "Кнопки или текст?",
             "type": "main",
             "index": 0
           }
@@ -701,6 +1116,144 @@
         [
           {
             "node": "Ответ в эмулятор",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сообщение или кнопка?": {
+      "main": [
+        [
+          {
+            "node": "Кнопка: разбор",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Нормализация ввода",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Приветствие или заказ?": {
+      "main": [
+        [
+          {
+            "node": "Приветствие",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LLM: Извлечь заказ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Приветствие": {
+      "main": [
+        [
+          {
+            "node": "Клиент: Telegram или эмулятор?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Кнопки или текст?": {
+      "main": [
+        [
+          {
+            "node": "Ответ клиенту (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ответ клиенту (текст)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Кнопка: разбор": {
+      "main": [
+        [
+          {
+            "node": "Кнопка: backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Кнопка: backend": {
+      "main": [
+        [
+          {
+            "node": "Кнопка: ответ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Кнопка: ответ": {
+      "main": [
+        [
+          {
+            "node": "Есть правка текста?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Есть правка текста?": {
+      "main": [
+        [
+          {
+            "node": "TG: правка сообщения",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG: ответ на кнопку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TG: правка сообщения": {
+      "main": [
+        [
+          {
+            "node": "TG: ответ на кнопку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Нормализация ввода": {
+      "main": [
+        [
+          {
+            "node": "Приветствие или заказ?",
             "type": "main",
             "index": 0
           }
