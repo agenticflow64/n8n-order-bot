@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "text": "привет, надо стрижку собаке на выходные, зовут Бобик, телефон 89161234567. срочно!!",
+    "expected": {"valid": true, "service_keywords": ["стрижк"], "urgency": "urgent", "contact": {"kind": "digits", "value": "9161234567"}, "customer_name": null}
+  },
+  {
+    "id": 2,
+    "text": "добрый день! ноут асус x515 не включается вообще(( можно на этой неделе? мой номер 8-921-333-44-55, зовут Дима",
+    "expected": {"valid": true, "service_keywords": ["ноут"], "urgency": "normal", "contact": {"kind": "digits", "value": "9213334455"}, "customer_name": "Дима"}
+  },
+  {
+    "id": 3,
+    "text": "ТЕЧЁТ КРАН НА КУХНЕ!!! СРОЧНО ПЛИЗ(( звоните 89167778899",
+    "expected": {"valid": true, "service_keywords": ["сантех", "кран", "смесител"], "urgency": "urgent", "contact": {"kind": "digits", "value": "9167778899"}, "customer_name": null}
+  },
+  {
+    "id": 4,
+    "text": "хочу записаться к косметологу на чистку лица, мне советовали Анну. завтра есть окошко?",
+    "expected": {"valid": true, "service_keywords": ["косметолог", "чистк"], "urgency": "normal", "contact": null, "customer_name": null}
+  },
+  {
+    "id": 5,
+    "text": "а вы вообще чё за контора??",
+    "expected": {"valid": false, "service_keywords": [], "urgency": null, "contact": null, "customer_name": null}
+  },
+  {
+    "id": 6,
+    "text": "Нужна уборка двушки после ремонта 🧹 примерно 60 кв.м. когда сможете? пишите в tg @marina_p",
+    "expected": {"valid": true, "service_keywords": ["уборк", "клининг"], "urgency": "normal", "contact": {"kind": "tg", "value": "@marina_p"}, "customer_name": null}
+  },
+  {
+    "id": 7,
+    "text": "надо доставить документы из офиса на Ленина 12 в бухгалтерию на Мира 3, срочно!! до 18:00",
+    "expected": {"valid": true, "service_keywords": ["курьер", "доставк"], "urgency": "urgent", "contact": null, "customer_name": null}
+  },
+  {
+    "id": 8,
+    "text": "здравствуйте! маникюр есть окошко завтра?",
+    "expected": {"valid": true, "service_keywords": ["маникюр"], "urgency": "normal", "contact": null, "customer_name": null}
+  },
+  {
+    "id": 9,
+    "text": "Репетитор по математике для 9 класса нужен, готовим к ОГЭ. писать в tg @dad_of_igor. Игорь",
+    "expected": {"valid": true, "service_keywords": ["репетитор", "математик"], "urgency": "normal", "contact": {"kind": "tg", "value": "@dad_of_igor"}, "customer_name": "Игорь"}
+  },
+  {
+    "id": 10,
+    "text": "записаться на замену масла то-60? машина камри. желательно в субботу утром. +7 999 555 66 77, Алексей",
+    "expected": {"valid": true, "service_keywords": ["масл", "автосервис", "то-"], "urgency": "normal", "contact": {"kind": "digits", "value": "9995556677"}, "customer_name": "Алексей"}
+  },
+  {
+    "id": 11,
+    "text": "нужен фотограф на выпускной в детсаду №12, июнь, бюджет до 15 тыс. почта anna@example.com",
+    "expected": {"valid": true, "service_keywords": ["фотограф"], "urgency": "normal", "contact": {"kind": "email", "value": "anna@example.com"}, "customer_name": null}
+  },
+  {
+    "id": 12,
+    "text": "подошва отвалилась на кроссовках, можно подклеить? я Вика",
+    "expected": {"valid": true, "service_keywords": ["обув", "кроссовк", "клеи"], "urgency": "normal", "contact": null, "customer_name": "Вика"}
+  }
+]
