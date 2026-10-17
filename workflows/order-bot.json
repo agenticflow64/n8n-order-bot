@@ -1265,7 +1265,8 @@
     "executionOrder": "v1",
     "saveDataErrorExecution": "all",
     "saveDataSuccessExecution": "all",
-    "saveExecutionProgress": true
+    "saveExecutionProgress": true,
+    "concurrency": 1
   },
   "pinData": {}
 }
