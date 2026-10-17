@@ -30,5 +30,5 @@ echo "  UI:       http://localhost:5678 (workflow «$WORKFLOW_NAME»)"
 echo "  Webhook:  http://localhost:5678/webhook/order-bot"
 echo "  Эмулятор: http://localhost:8000/chat"
 if grep -q '^TELEGRAM_BOT_TOKEN=..*' .env 2>/dev/null; then
-  echo "  Telegram: бот опрашивает getUpdates каждые 30 с — напишите ему /start и заказ текстом."
+  echo "  Telegram: бот опрашивает getUpdates каждые 5 с — напишите ему /start и заказ текстом."
 fi
