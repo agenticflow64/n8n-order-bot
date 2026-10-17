@@ -19,8 +19,12 @@ WELCOME_TEXT = (
     "Через несколько секунд пришлю сводку и две кнопки, подтвердить или отменить."
 )
 
-# /start, /help, /start@botname, «/start привет» — всё это приветствие
-_WELCOME_RE = re.compile(r"^/(start|help)(@[\w_]+)?(\s|$)", re.IGNORECASE)
+# /start, /help, /start@botname, «/start привет» — всё это приветствие;
+# «записаться» текстом (подпись inline-кнопки) — тоже, заказ пусть пишут подробно
+_WELCOME_RE = re.compile(
+    r"^(/(start|help)(@[\w_]+)?(\s|$)|\s*(записаться|записать\s+меня)[\s!?.]*$)",
+    re.IGNORECASE,
+)
 
 _CALLBACK_RE = re.compile(r"^(confirm|cancel):(\d+)$")
 

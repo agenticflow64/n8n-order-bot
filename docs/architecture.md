@@ -90,7 +90,7 @@ flowchart LR
 | Компонент | Технологии | Роль |
 |-----------|------------|------|
 | n8n workflow | n8n, HTTP Request, Code, Switch, Wait, Webhook, Telegram | оркестрация всего флоу; LLM-вызов делает сам n8n |
-| LLM | OpenRouter, бесплатные модели (`:free`, по умолчанию `nvidia/nemotron-3-super-120b-a12b:free`) | свободный текст → строгий JSON (услуга, поля, срочность, имя, контакт, valid) |
+| LLM | OpenRouter, бесплатные модели (`:free`, по умолчанию `liquid/lfm-2.5-2.6b:free`) | свободный текст → строгий JSON (услуга, поля, срочность, имя, валидность); телефон — регэкспом из сырого текста |
 | Backend | Python, FastAPI, pydantic, SQLAlchemy, SQLite | приём структурированных заказов, дедуп, статусы, подтверждения, админка |
 | Эмулятор чата | static HTML/JS (отдаёт backend) | демо без реального Telegram-токена: шлёт webhook в n8n, рисует ответ бота |
 | Инфраструктура | docker compose, healthchecks | `docker compose up` поднимает всё |

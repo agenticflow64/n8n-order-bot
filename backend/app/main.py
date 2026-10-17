@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,6 +49,22 @@ def hash_text(text: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+# LLM иногда искажает цифры телефона, поэтому контакт достаём из исходного
+# текста детерминированно: ищем цепочку 10–11 цифр (разделители не важны)
+_PHONE_RE = re.compile(r"\+?\d(?:[\s().-]*\d){8,10}")
+
+
+def extract_phone(text: str) -> Optional[str]:
+    """Телефон из сырого текста заказа; None — если не нашли."""
+    for match in _PHONE_RE.finditer(text or ""):
+        digits = re.sub(r"\D", "", match.group(0))
+        if len(digits) == 10 and digits.startswith("9"):
+            return "+7" + digits
+        if len(digits) == 11 and digits[0] in "78":
+            return "+7" + digits[1:]
+    return None
+
+
 def order_to_out(order: Order, duplicate: bool = False) -> OrderOut:
     data = {
         "id": order.id,
@@ -85,7 +102,8 @@ def create_order(payload: OrderCreate, response: Response, db: Session = Depends
         fields_json=json.dumps(payload.fields, ensure_ascii=False),
         urgency=payload.urgency.value,
         customer_name=payload.customer_name,
-        contact=payload.contact,
+        # телефон из сырого текста надёжнее, чем из ответа LLM
+        contact=extract_phone(payload.raw_text) or payload.contact,
         raw_text=payload.raw_text,
         text_hash=text_hash,
         source=payload.source.value,

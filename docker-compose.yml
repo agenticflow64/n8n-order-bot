@@ -21,7 +21,7 @@ services:
       - N8N_DIAGNOSTICS_ENABLED=false
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Moscow}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-liquid/lfm-2.5-2.6b:free}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       # токен Telegram-бота: нужен workflow для getUpdates-опроса (пусто → опрос не выполняется)
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}

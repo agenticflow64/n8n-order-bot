@@ -26,4 +26,4 @@ SYSTEM_PROMPT = (
     "- Отвечай только JSON, без пояснений."
 )
 
-DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning:free"
+DEFAULT_MODEL = "liquid/lfm-2.5-2.6b:free"

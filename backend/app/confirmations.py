@@ -38,6 +38,11 @@ def build_confirmation(order: dict) -> str:
     ]
     fields = order.get("fields") or {}
     for key, value in fields.items():
+        if value is None or value == "None":
+            continue
+        # контакт уже выведен отдельной строкой (нормализован из сырого текста)
+        if str(key).strip().lower() in {"contact", "phone", "телефон", "phone_number"}:
+            continue
         lines.append(f"  {key}: {value}")
     urgency = order.get("urgency") or "normal"
     lines.append(f"Срочность: {URGENCY_RU.get(urgency, urgency)}")
